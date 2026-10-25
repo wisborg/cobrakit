@@ -41,7 +41,7 @@ A program that has turned cobra's completion command off
 
 `strava.Add` adds `strava login`, `logout`, `status` and `list` beneath a program's root, and
 `--strava-config` to every command, so fitdash, videofx and course connect to the user's own
-Strava activities the same way. `strava.Open` is the client a command then fetches with, from
+Strava activities the same way. `strava.Loader` reads a command's activities -- `strava:ID` from Strava, a file as the program reads it, and with `Fetch{Attach: true}` a file given Strava's title, description and segments -- and `strava.Open` is the client underneath it, from
 fitactivity's `strava` package, which does the work and keeps Strava's API Policy.
 
 ```
