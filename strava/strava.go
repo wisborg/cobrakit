@@ -22,13 +22,18 @@ import (
 	fs "github.com/wisborg/fitactivity/strava"
 )
 
-// configFlag is the flag naming the credentials file.
-const configFlag = "strava-config"
+// configFlag is the flag naming the credentials file, and refreshFlag the
+// one asking Strava again rather than the cache.
+const (
+	configFlag  = "strava-config"
+	refreshFlag = "strava-refresh"
+)
 
 // Add adds the strava command beneath root, and --strava-config to every
 // command, for the ones that fetch from Strava.
 func Add(root *cobra.Command) *cobra.Command {
 	root.PersistentFlags().String(configFlag, "", "the file holding your Strava API application's client id and secret (default: $"+fs.EnvConfig+", then ~/.config/strava.yaml)")
+	root.PersistentFlags().Bool(refreshFlag, false, "ask Strava again for the activities a command fetches, rather than the answers kept for a day, and keep the new ones: for an activity edited on Strava since")
 	program := root.Name()
 	cmd := &cobra.Command{
 		Use:   "strava",
@@ -45,7 +50,9 @@ and secret in ~/.config/strava.yaml:
 or in $` + fs.EnvClientID + ` and $` + fs.EnvClientSecret + `. Then "` + program + ` strava login" once.
 
 What is fetched is kept for a day and then deleted, as Strava's API Policy
-asks, and only your own activities are fetched. Nothing contacts Strava
+asks, and only your own activities are fetched. An activity edited on Strava
+since it was fetched -- gear added, a title changed -- is read as it was until
+then; --strava-refresh asks for it again, and keeps the new answer. Nothing contacts Strava
 unless a command is asked to.`,
 	}
 	cmd.AddCommand(loginCmd(), logoutCmd(), statusCmd(), listCmd())
@@ -73,7 +80,9 @@ func Open(cmd *cobra.Command, w io.Writer) (*fs.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return fs.New(creds, cache), nil
+	c := fs.New(creds, cache)
+	c.Refresh, _ = cmd.Flags().GetBool(refreshFlag)
+	return c, nil
 }
 
 // Explain is err with what to do about it, for the errors a user can fix: no

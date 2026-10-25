@@ -2,6 +2,7 @@ package strava
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -84,11 +85,24 @@ func TestAdd_GivesEveryCommandTheConfigFlag(t *testing.T) {
 	other := &cobra.Command{Use: "summary", RunE: func(*cobra.Command, []string) error { return nil }}
 	root.AddCommand(other)
 	Add(root)
-	root.SetArgs([]string{"summary", "--strava-config", "/somewhere/strava.yaml"})
+	root.SetArgs([]string{"summary", "--strava-config", "/somewhere/strava.yaml", "--strava-refresh"})
 	if err := root.Execute(); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := other.Flags().GetString(configFlag); v != "/somewhere/strava.yaml" {
 		t.Errorf("--strava-config on another command read as %q", v)
+	}
+	t.Setenv("STRAVA_CLIENT_ID", "4242")
+	t.Setenv("STRAVA_CLIENT_SECRET", "invented")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("STRAVA_CONFIG", "")
+	other.Flags().Set(configFlag, "")
+	c, err := Open(other, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Refresh {
+		t.Error("--strava-refresh did not reach the client")
 	}
 }

@@ -48,6 +48,7 @@ fitactivity's `strava` package, which does the work and keeps Strava's API Polic
 course strava login             # once: allow access in the browser
 course strava list --week       # this week's activities, with their ids
 course summary strava:1234567890
+course summary --strava-refresh strava:1234567890   # ask again, for an activity edited since
 course strava logout            # revoke access, and forget the login and what was fetched
 ```
 
