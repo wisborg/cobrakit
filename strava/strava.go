@@ -19,7 +19,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/wisborg/cobrakit/secrets"
 	fs "github.com/wisborg/fitactivity/strava"
+	ws "github.com/wisborg/secrets"
 )
 
 // configFlag is the flag naming the credentials file, and refreshFlag the
@@ -29,8 +31,9 @@ const (
 	refreshFlag = "strava-refresh"
 )
 
-// Add adds the strava command beneath root, and --strava-config to every
-// command, for the ones that fetch from Strava.
+// Add adds the strava command beneath root, --strava-config to every
+// command, for the ones that fetch from Strava, and the application's
+// credentials and the login to what root's secrets command lists.
 func Add(root *cobra.Command) *cobra.Command {
 	root.PersistentFlags().String(configFlag, "", "the file holding your Strava API application's client id and secret (default: $"+fs.EnvConfig+", then ~/.config/strava.yaml)")
 	root.PersistentFlags().Bool(refreshFlag, false, "ask Strava again for the activities a command fetches, rather than the answers kept for a day, and keep the new ones: for an activity edited on Strava since")
@@ -47,7 +50,10 @@ and secret in ~/.config/strava.yaml:
     client_id: 12345
     client_secret: 0123abcd...
 
-or in $` + fs.EnvClientID + ` and $` + fs.EnvClientSecret + `. Then "` + program + ` strava login" once.
+or in $` + fs.EnvClientID + ` and $` + fs.EnvClientSecret + `, or in the system's keychain with
+"` + program + ` secrets set ` + fs.ClientIDName + `" and "` + program + ` secrets set ` + fs.ClientSecretName + `".
+Then "` + program + ` strava login" once; the login is kept in the keychain where
+there is one, and in strava-token.json beside strava.yaml where not.
 
 What is fetched is kept for a day and then deleted, as Strava's API Policy
 asks, and only your own activities are fetched. An activity edited on Strava
@@ -57,6 +63,10 @@ unless a command is asked to.`,
 	}
 	cmd.AddCommand(loginCmd(), logoutCmd(), statusCmd(), listCmd())
 	root.AddCommand(cmd)
+	secrets.Add(root, func(cmd *cobra.Command) ([]ws.Secret, error) {
+		path, _ := cmd.Flags().GetString(configFlag)
+		return fs.Secrets(path)
+	})
 	return cmd
 }
 
@@ -100,7 +110,8 @@ func loginCmd() *cobra.Command {
 		Use:   "login",
 		Short: "Allow access to your Strava activities, once",
 		Long: `login opens Strava in your browser to allow your application to read your
-activities, and keeps the token it gets beside your credentials, for you alone.
+activities, and keeps the token it gets in the system's keychain, or beside
+your credentials, for you alone, where there is none.
 Strava sends the browser back to this program on localhost.
 
 On a machine without a browser -- one reached over ssh -- --no-browser prints
@@ -124,7 +135,7 @@ browser to, which it will fail to open.`,
 			if t.AthleteName != "" {
 				who = t.AthleteName + " (athlete " + who + ")"
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Logged in to Strava as %s; the token is kept in %s\n", who, client.TokenPath())
+			fmt.Fprintf(cmd.OutOrStdout(), "Logged in to Strava as %s; the token is kept in %s\n", who, client.TokenWhere())
 			return nil
 		},
 	}
@@ -168,7 +179,7 @@ func statusCmd() *cobra.Command {
 			}
 			w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 			defer w.Flush()
-			t, err := fs.LoadToken(client.TokenPath())
+			t, err := client.LoadToken()
 			if errors.Is(err, fs.ErrNotLoggedIn) {
 				fmt.Fprintf(w, "login\tnone; run \"%s strava login\"\n", cmd.Root().Name())
 				return nil
@@ -182,7 +193,7 @@ func statusCmd() *cobra.Command {
 			}
 			fmt.Fprintf(w, "login\t%s (athlete %d), application %s\n", name, t.AthleteID, t.ClientID)
 			fmt.Fprintf(w, "allowed\t%s\n", t.Scope)
-			fmt.Fprintf(w, "token\t%s, %s\n", client.TokenPath(), expiry(t.ExpiresAt))
+			fmt.Fprintf(w, "token\t%s, %s\n", client.TokenWhere(), expiry(t.ExpiresAt))
 			n, oldest := client.Cache().Entries(t.AthleteID)
 			if n == 0 {
 				fmt.Fprintf(w, "cached\tnothing, in %s\n", client.Cache().Dir())

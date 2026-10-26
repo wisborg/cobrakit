@@ -54,7 +54,22 @@ course strava logout            # revoke access, and forget the login and what w
 
 Each user registers their own Strava API application, with `localhost` as its Authorization
 Callback Domain, and puts its client id and secret in `~/.config/strava.yaml` under `strava:` as
-`client_id` and `client_secret`, or in `$STRAVA_CLIENT_ID` and `$STRAVA_CLIENT_SECRET`.
+`client_id` and `client_secret`, in `$STRAVA_CLIENT_ID` and `$STRAVA_CLIENT_SECRET`, or in the
+system's keychain with `secrets set`. The login is kept in the keychain where there is one.
+
+## secrets
+
+`secrets.Add` gives a program a `secrets` command for the secrets it uses: which are set, and
+where -- the environment, the system's keychain, a file the user wrote -- and setting or removing
+one in the keychain. Each part of a program that uses secrets adds its own; `strava.Add` adds the
+Strava application's and the login. Nothing it prints is a secret's value. The work is
+[secrets](https://github.com/wisborg/secrets)'.
+
+```
+course secrets status                        # what is set, and where
+course secrets set strava/client_secret      # typed unseen, or piped in
+course secrets delete strava/client_secret
+```
 
 ## Building and testing
 
@@ -66,7 +81,8 @@ make race    # the tests as CI runs them
 ## Dependencies
 
 cobra (Apache-2.0), and beneath it pflag (BSD-3-Clause) and mousetrap
-(Apache-2.0); see [NOTICE](NOTICE).
+(Apache-2.0); x/term (BSD-3-Clause), to read a secret without showing it; and
+fitactivity and secrets, with what they are built on; see [NOTICE](NOTICE).
 
 ## Licence
 

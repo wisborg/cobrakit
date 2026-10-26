@@ -27,6 +27,9 @@ BSD 3-Clause components
 
   github.com/spf13/pflag     Copyright (c) 2012 Alex Ogier;
                              Copyright (c) 2012 The Go Authors.
+  golang.org/x/term          Copyright 2009 The Go Authors.  Reads a secret
+                             typed at the terminal without showing it.
+  golang.org/x/sys           Copyright 2009 The Go Authors.  Through x/term.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the conditions of the BSD 3-Clause
@@ -35,3 +38,23 @@ list of conditions, and the disclaimer of warranties.  Neither the names of
 the copyright holders nor the names of their contributors may be used to
 endorse or promote products derived from this software without specific
 prior written permission.
+
+
+-------------------------------------------------------------------------------
+Through github.com/wisborg/secrets and github.com/wisborg/fitactivity
+-------------------------------------------------------------------------------
+
+Both are Apache 2.0, by the same author; their NOTICE files list what they
+are built on in full.  In brief:
+
+  github.com/zalando/go-keyring  MIT; Copyright (c) 2016 Zalando SE.  It
+                             carries shellescape, MIT, Copyright (c) 2016
+                             Alessio Treglia.
+  github.com/danieljoos/wincred  MIT; Copyright (c) 2014 Daniel Joos.
+  github.com/godbus/dbus/v5  BSD 2-Clause; Copyright (c) 2013, Georg Reinke,
+                             Google.
+  go.yaml.in/yaml/v3         MIT and Apache 2.0; Copyright (c) 2011-2019
+                             Canonical Ltd; Copyright (c) 2006-2010 Kirill
+                             Simonov.
+  github.com/muktihari/fit   BSD 3-Clause; Copyright (c) 2023, Hikmatulloh
+                             Hari Mukti.

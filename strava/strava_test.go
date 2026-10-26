@@ -3,12 +3,23 @@ package strava
 import (
 	"bytes"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/wisborg/secrets"
 )
+
+// The tests keep logins in files, and the keychain they would reach is one
+// in memory, never the user's own.
+func TestMain(m *testing.M) {
+	secrets.MockKeychain(nil)
+	os.Setenv(secrets.EnvStore, "file")
+	os.Exit(m.Run())
+}
 
 func TestWindow(t *testing.T) {
 	loc := time.FixedZone("test", 10*3600)
@@ -104,5 +115,20 @@ func TestAdd_GivesEveryCommandTheConfigFlag(t *testing.T) {
 	}
 	if !c.Refresh {
 		t.Error("--strava-refresh did not reach the client")
+	}
+}
+
+// The application's credentials and the login are among the program's
+// secrets, and where each is looked for is said.
+func TestAdd_ListsItsSecrets(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("STRAVA_CONFIG", "")
+	t.Setenv("STRAVA_CLIENT_ID", "4242")
+	t.Setenv("STRAVA_CLIENT_SECRET", "")
+	out, err := run(t, "secrets", "status")
+	for _, want := range []string{"strava/client_id      $STRAVA_CLIENT_ID", "strava/client_secret  not set", "strava/token"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("status lacks %q: %q, %v", want, out, err)
+		}
 	}
 }
