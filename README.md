@@ -71,6 +71,16 @@ course secrets set strava/client_secret      # typed unseen, or piped in
 course secrets delete strava/client_secret
 ```
 
+## weather
+
+`weather.AddFlags` gives a command `--weather`, `--wind-exposure` and `--acclimatised`, and
+`weather.Resolve` fetches the weather an activity was done in when asked -- from Open-Meteo, through
+fitactivity's `weather` package, which tells Open-Meteo where and when it was, so only with the
+flag. `WriteNote` says what the weather was, whether this run sent anything, and the credit its
+licence asks for; `CostsOf` and `WriteCosts` what the wind, the heat and the altitude cost a run,
+each with what it rests on; `JSONOf` the same for JSON and YAML, with the same names in every
+program. fitdash and course both say it through this, in the same words.
+
 ## Building and testing
 
 ```
