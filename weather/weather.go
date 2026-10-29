@@ -162,26 +162,70 @@ func Resolve(cmd *cobra.Command, o Options, track *fitactivity.Track, flight boo
 }
 
 // Line is the weather over an activity in a line: "14–16°C, dew point
-// 9°C, wind 15 km/h from WSW, gusts 25". Every place a program says it,
-// it says it in these words.
+// 9°C, wind 15 km/h from WSW, gusts 25". Where it changed over the
+// activity -- a marathon into the afternoon's heat, a long ride a front
+// passed over -- it says how, from the start to the end: "12°C rising to
+// 24°C", "wind 10 rising to 25 km/h from WSW, turning SE"; and a wind that
+// turned about without settling is "variable" rather than given an
+// average direction it never blew from. Every place a program says it, it
+// says it in these words.
 func Line(s fw.Summary, u units.Set) string {
-	t := func(v float64) float64 { return u.Temperature.FromSI(v) }
-	temp := fmt.Sprintf("%.0f%s", t(s.TemperatureMin), u.Temperature.Name)
-	if lo, hi := fmt.Sprintf("%.0f", t(s.TemperatureMin)), fmt.Sprintf("%.0f", t(s.TemperatureMax)); lo != hi {
-		temp = lo + "–" + hi + u.Temperature.Name
+	t := func(v float64) string { return fmt.Sprintf("%.0f", u.Temperature.FromSI(v)) }
+	deg := u.Temperature.Name
+	temp := t(s.TemperatureMin) + deg
+	if lo, hi := t(s.TemperatureMin), t(s.TemperatureMax); lo != hi {
+		temp = lo + "–" + hi + deg
 	}
-	parts := []string{temp, fmt.Sprintf("dew point %.0f%s", t(s.DewPoint), u.Temperature.Name)}
-	if s.WindSpeed < 0.3 {
-		parts = append(parts, "calm")
-	} else {
-		wind := fmt.Sprintf("wind %.0f %s from %s", u.Speed.FromSI(s.WindSpeed), u.Speed.Name, fw.Compass(s.WindFrom))
-		if gust := u.Speed.FromSI(s.Gusts); gust >= u.Speed.FromSI(s.WindSpeed)+5 {
-			wind += fmt.Sprintf(", gusts %.0f", gust)
+	if rise := s.End.Temperature - s.Start.Temperature; math.Abs(rise) >= tempChange {
+		way := "rising"
+		if rise < 0 {
+			way = "falling"
 		}
-		parts = append(parts, wind)
+		from, to := t(s.Start.Temperature), t(s.End.Temperature)
+		temp = from + deg + " " + way + " to " + to + deg
+		if lo, hi := t(s.TemperatureMin), t(s.TemperatureMax); (lo != from && lo != to) || (hi != from && hi != to) {
+			temp += " (" + lo + "–" + hi + deg + ")"
+		}
 	}
-	return strings.Join(parts, ", ")
+	parts := []string{temp, "dew point " + t(s.DewPoint) + deg}
+	if s.WindSpeed < 0.3 {
+		return strings.Join(append(parts, "calm"), ", ")
+	}
+	v := func(ms float64) string { return fmt.Sprintf("%.0f", u.Speed.FromSI(ms)) }
+	wind := "wind " + v(s.WindSpeed) + " " + u.Speed.Name
+	if change := s.End.WindSpeed - s.Start.WindSpeed; math.Abs(change) >= windChange {
+		way := "rising"
+		if change < 0 {
+			way = "easing"
+		}
+		wind = "wind " + v(s.Start.WindSpeed) + " " + way + " to " + v(s.End.WindSpeed) + " " + u.Speed.Name
+	}
+	switch {
+	case s.Start.WindSpeed >= 1 && s.End.WindSpeed >= 1 && fw.Apart(s.Start.WindFrom, s.End.WindFrom) >= windTurn:
+		wind += " from " + fw.Compass(s.Start.WindFrom) + ", turning " + fw.Compass(s.End.WindFrom)
+	case s.WindSteadiness < windSteady:
+		wind += ", variable"
+	default:
+		wind += " from " + fw.Compass(s.WindFrom)
+	}
+	if gust := u.Speed.FromSI(s.Gusts); gust >= u.Speed.FromSI(s.WindSpeed)+5 {
+		wind += fmt.Sprintf(", gusts %.0f", gust)
+	}
+	return strings.Join(append(parts, wind), ", ")
 }
+
+// What Line calls a change from the start to the end of an activity: 3 °C
+// warmer or cooler, which an hour's run seldom meets and a marathon into
+// the afternoon often does; a wind 3 m/s (11 km/h) stronger or lighter;
+// and one that turned through 45°, two points of the compass either way.
+// Short of a turn, a wind whose average as a vector is less than half its
+// average speed went too many ways to be said to come from one.
+const (
+	tempChange = 3.0
+	windChange = 3.0
+	windTurn   = 45.0
+	windSteady = 0.5
+)
 
 // WriteNote says what the weather was, whether this run told Open-Meteo
 // where and when the activity was -- only when it did, so the one line
@@ -394,7 +438,17 @@ type JSON struct {
 	WindFromDeg     float64 `json:"wind_from_deg" yaml:"wind_from_deg"`
 	GustsMS         float64 `json:"gusts_ms" yaml:"gusts_ms"`
 	RadiationWM2    float64 `json:"radiation_w_m2" yaml:"radiation_w_m2"`
-	Source          string  `json:"source" yaml:"source"`
+	// The weather at the start and the end, which over a long activity the
+	// averages above hide, and how steady the wind's direction was: 1 for
+	// one that never turned, near 0 for one that blew every way.
+	TemperatureStartC float64 `json:"temperature_start_c" yaml:"temperature_start_c"`
+	TemperatureEndC   float64 `json:"temperature_end_c" yaml:"temperature_end_c"`
+	WindSpeedStartMS  float64 `json:"wind_speed_start_ms" yaml:"wind_speed_start_ms"`
+	WindSpeedEndMS    float64 `json:"wind_speed_end_ms" yaml:"wind_speed_end_ms"`
+	WindFromStartDeg  float64 `json:"wind_from_start_deg" yaml:"wind_from_start_deg"`
+	WindFromEndDeg    float64 `json:"wind_from_end_deg" yaml:"wind_from_end_deg"`
+	WindSteadiness    float64 `json:"wind_steadiness" yaml:"wind_steadiness"`
+	Source            string  `json:"source" yaml:"source"`
 
 	WindCostS    *float64 `json:"wind_cost_s,omitempty" yaml:"wind_cost_s,omitempty"`
 	WindExposure string   `json:"wind_exposure,omitempty" yaml:"wind_exposure,omitempty"`
@@ -422,7 +476,11 @@ func JSONOf(p Plan, track *fitactivity.Track, c Costs, hasCosts bool) *JSON {
 	}
 	j := &JSON{TemperatureMinC: s.TemperatureMin, TemperatureMaxC: s.TemperatureMax,
 		DewPointC: s.DewPoint, HumidityPct: s.Humidity, WindSpeedMS: s.WindSpeed, WindFromDeg: s.WindFrom,
-		GustsMS: s.Gusts, RadiationWM2: s.Radiation, Source: fw.Credit + " (CC BY 4.0, " + fw.CreditURL + ")"}
+		GustsMS: s.Gusts, RadiationWM2: s.Radiation,
+		TemperatureStartC: s.Start.Temperature, TemperatureEndC: s.End.Temperature,
+		WindSpeedStartMS: s.Start.WindSpeed, WindSpeedEndMS: s.End.WindSpeed,
+		WindFromStartDeg: s.Start.WindFrom, WindFromEndDeg: s.End.WindFrom, WindSteadiness: s.WindSteadiness,
+		Source: fw.Credit + " (CC BY 4.0, " + fw.CreditURL + ")"}
 	if !hasCosts {
 		return j
 	}

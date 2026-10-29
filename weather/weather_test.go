@@ -19,7 +19,7 @@ import (
 // The line every program says the weather in, in its units.
 func TestLine(t *testing.T) {
 	m, _ := units.Of(units.Metric)
-	s := fw.Summary{TemperatureMin: 14.2, TemperatureMax: 16.4, DewPoint: 9, WindSpeed: 4.2, WindFrom: 250, Gusts: 9}
+	s := fw.Summary{TemperatureMin: 14.2, TemperatureMax: 16.4, DewPoint: 9, WindSpeed: 4.2, WindFrom: 250, Gusts: 9, WindSteadiness: 0.95}
 	if got, want := Line(s, m), "14–16°C, dew point 9°C, wind 15 km/h from WSW, gusts 32"; got != want {
 		t.Errorf("metric: %q, want %q", got, want)
 	}
@@ -27,6 +27,31 @@ func TestLine(t *testing.T) {
 	s = fw.Summary{TemperatureMin: 20, TemperatureMax: 20.2, DewPoint: 10, WindSpeed: 0.1}
 	if got := Line(s, imp); !strings.HasPrefix(got, "68°F,") || !strings.HasSuffix(got, "calm") {
 		t.Errorf("imperial: %q", got)
+	}
+}
+
+// Over a long activity the line says how the weather changed from the
+// start to the end, and calls a wind that went every way variable.
+func TestLine_Changing(t *testing.T) {
+	m, _ := units.Of(units.Metric)
+	at := func(temp, speed, from float64) fw.Conditions {
+		return fw.Conditions{Temperature: temp, WindSpeed: speed, WindFrom: from}
+	}
+	for _, tc := range []struct {
+		name string
+		s    fw.Summary
+		want string
+	}{
+		{"a marathon into the afternoon", fw.Summary{TemperatureMin: 10.2, TemperatureMax: 21.6, DewPoint: 6, WindSpeed: 4, WindFrom: 250, WindSteadiness: 0.98,
+			Start: at(10.2, 3.5, 245), End: at(21.6, 4.5, 255)}, "10°C rising to 22°C, dew point 6°C, wind 14 km/h from WSW"},
+		{"a front over a long ride", fw.Summary{TemperatureMin: 13.8, TemperatureMax: 24.1, DewPoint: 12, WindSpeed: 5, WindFrom: 200, WindSteadiness: 0.7,
+			Start: at(22, 2.8, 250), End: at(14, 7.2, 135)}, "22°C falling to 14°C (14–24°C), dew point 12°C, wind 10 rising to 26 km/h from WSW, turning SE"},
+		{"a wind that went round and back", fw.Summary{TemperatureMin: 15, TemperatureMax: 16, DewPoint: 8, WindSpeed: 2, WindFrom: 10, WindSteadiness: 0.3,
+			Start: at(15, 2, 90), End: at(16, 2, 100)}, "15–16°C, dew point 8°C, wind 7 km/h, variable"},
+	} {
+		if got := Line(tc.s, m); got != tc.want {
+			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }
 
@@ -75,7 +100,7 @@ func TestJSONOf(t *testing.T) {
 		acclim: Acclimatisation{Heat: true}}
 	j := JSONOf(p, tr, c, true)
 	if j == nil || j.TemperatureMinC != 12 || j.WindFromDeg != 90 || *j.WindCostS != 30 || j.WindExposure != "open" ||
-		j.HeatCostS != nil || *j.WBGTMaxC != 19 || len(j.Acclimatised) != 1 || j.Acclimatised[0] != "heat" {
+		j.HeatCostS != nil || *j.WBGTMaxC != 19 || j.TemperatureStartC != 12 || j.WindFromEndDeg != 90 || len(j.Acclimatised) != 1 || j.Acclimatised[0] != "heat" {
 		t.Errorf("json %+v", j)
 	}
 	if JSONOf(Plan{}, tr, c, true) != nil {

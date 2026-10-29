@@ -79,7 +79,10 @@ fitactivity's `weather` package, which tells Open-Meteo where and when it was, s
 flag. `WriteNote` says what the weather was, whether this run sent anything, and the credit its
 licence asks for; `CostsOf` and `WriteCosts` what the wind, the heat and the altitude cost a run,
 each with what it rests on; `JSONOf` the same for JSON and YAML, with the same names in every
-program. fitdash and course both say it through this, in the same words.
+program. Over a marathon or a long ride the line says how the weather changed from the start to
+the end -- "12°C rising to 24°C", "wind 10 rising to 25 km/h from WSW, turning SE" -- and calls a
+wind that went every way variable, rather than giving an average direction it never blew from.
+fitdash and course both say it through this, in the same words.
 
 ## Building and testing
 
