@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
-	github.com/wisborg/fitactivity v0.23.0
+	github.com/wisborg/fitactivity v0.24.0
 	github.com/wisborg/secrets v0.1.0
 	golang.org/x/term v0.27.0
 )
