@@ -55,6 +55,21 @@ func TestLine_Changing(t *testing.T) {
 	}
 }
 
+// With a weather code the line opens with the sky, and the words come
+// apart for a program laying them out itself.
+func TestWordsOf_Sky(t *testing.T) {
+	m, _ := units.Of(units.Metric)
+	s := fw.Summary{TemperatureMin: 12, TemperatureMax: 13, DewPoint: 10, WindSpeed: 3, WindFrom: 180, WindSteadiness: 1,
+		HasSky: true, WeatherCode: 61}
+	w := WordsOf(s, m)
+	if w.Sky != "light rain" || w.Temperature != "12–13°C" || w.Wind != "wind 11 km/h from S" {
+		t.Errorf("words %+v", w)
+	}
+	if got, want := Line(s, m), "light rain, 12–13°C, dew point 10°C, wind 11 km/h from S"; got != want {
+		t.Errorf("%q, want %q", got, want)
+	}
+}
+
 // Each cost is said with what it rests on; one the athlete was
 // acclimatised to is left out and said to be; an altitude below where
 // oxygen uptake falls is not mentioned.
@@ -102,6 +117,15 @@ func TestJSONOf(t *testing.T) {
 	if j == nil || j.TemperatureMinC != 12 || j.WindFromDeg != 90 || *j.WindCostS != 30 || j.WindExposure != "open" ||
 		j.HeatCostS != nil || *j.WBGTMaxC != 19 || j.TemperatureStartC != 12 || j.WindFromEndDeg != 90 || len(j.Acclimatised) != 1 || j.Acclimatised[0] != "heat" {
 		t.Errorf("json %+v", j)
+	}
+	if j.WeatherCode != nil || j.Sky != "" {
+		t.Errorf("a sky without a code: %+v", j)
+	}
+	for i := range hours {
+		hours[i].HasSky, hours[i].WeatherCode, hours[i].Precipitation, hours[i].CloudCover = true, 80, 1.2, 70
+	}
+	if j := JSONOf(p, tr, c, true); j.WeatherCode == nil || *j.WeatherCode != 80 || j.Sky != "light showers" || *j.CloudCoverPct != 70 {
+		t.Errorf("sky json %+v", j)
 	}
 	if JSONOf(Plan{}, tr, c, true) != nil {
 		t.Error("weather without a report")

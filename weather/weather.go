@@ -161,20 +161,31 @@ func Resolve(cmd *cobra.Command, o Options, track *fitactivity.Track, flight boo
 	return p, nil
 }
 
-// Line is the weather over an activity in a line: "14–16°C, dew point
-// 9°C, wind 15 km/h from WSW, gusts 25". Where it changed over the
+// Words are the weather over an activity in the words every program says
+// it in, part by part, for a program that lays them out itself: the sky,
+// "light rain", empty without a weather code; the temperature, "14–16°C";
+// the dew point, "dew point 9°C"; and the wind, "wind 15 km/h from WSW,
+// gusts 25", or "calm". Line joins them.
+type Words struct {
+	Sky, Temperature, DewPoint, Wind string
+}
+
+// WordsOf is s in words, in u. Where the weather changed over the
 // activity -- a marathon into the afternoon's heat, a long ride a front
-// passed over -- it says how, from the start to the end: "12°C rising to
+// passed over -- they say how, from the start to the end: "12°C rising to
 // 24°C", "wind 10 rising to 25 km/h from WSW, turning SE"; and a wind that
 // turned about without settling is "variable" rather than given an
-// average direction it never blew from. Every place a program says it, it
-// says it in these words.
-func Line(s fw.Summary, u units.Set) string {
+// average direction it never blew from.
+func WordsOf(s fw.Summary, u units.Set) Words {
+	var w Words
+	if s.HasSky {
+		w.Sky = fw.Describe(s.WeatherCode)
+	}
 	t := func(v float64) string { return fmt.Sprintf("%.0f", u.Temperature.FromSI(v)) }
 	deg := u.Temperature.Name
-	temp := t(s.TemperatureMin) + deg
+	w.Temperature = t(s.TemperatureMin) + deg
 	if lo, hi := t(s.TemperatureMin), t(s.TemperatureMax); lo != hi {
-		temp = lo + "–" + hi + deg
+		w.Temperature = lo + "–" + hi + deg
 	}
 	if rise := s.End.Temperature - s.Start.Temperature; math.Abs(rise) >= tempChange {
 		way := "rising"
@@ -182,14 +193,15 @@ func Line(s fw.Summary, u units.Set) string {
 			way = "falling"
 		}
 		from, to := t(s.Start.Temperature), t(s.End.Temperature)
-		temp = from + deg + " " + way + " to " + to + deg
+		w.Temperature = from + deg + " " + way + " to " + to + deg
 		if lo, hi := t(s.TemperatureMin), t(s.TemperatureMax); (lo != from && lo != to) || (hi != from && hi != to) {
-			temp += " (" + lo + "–" + hi + deg + ")"
+			w.Temperature += " (" + lo + "–" + hi + deg + ")"
 		}
 	}
-	parts := []string{temp, "dew point " + t(s.DewPoint) + deg}
+	w.DewPoint = "dew point " + t(s.DewPoint) + deg
 	if s.WindSpeed < 0.3 {
-		return strings.Join(append(parts, "calm"), ", ")
+		w.Wind = "calm"
+		return w
 	}
 	v := func(ms float64) string { return fmt.Sprintf("%.0f", u.Speed.FromSI(ms)) }
 	wind := "wind " + v(s.WindSpeed) + " " + u.Speed.Name
@@ -211,10 +223,25 @@ func Line(s fw.Summary, u units.Set) string {
 	if gust := u.Speed.FromSI(s.Gusts); gust >= u.Speed.FromSI(s.WindSpeed)+5 {
 		wind += fmt.Sprintf(", gusts %.0f", gust)
 	}
-	return strings.Join(append(parts, wind), ", ")
+	w.Wind = wind
+	return w
 }
 
-// What Line calls a change from the start to the end of an activity: 3 °C
+// Line is the weather over an activity in a line: "light rain, 14–16°C,
+// dew point 9°C, wind 15 km/h from WSW, gusts 25" -- WordsOf's words,
+// joined. Every place a program says it, it says it in these words.
+func Line(s fw.Summary, u units.Set) string {
+	w := WordsOf(s, u)
+	var parts []string
+	for _, p := range []string{w.Sky, w.Temperature, w.DewPoint, w.Wind} {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// What WordsOf calls a change from the start to the end of an activity: 3 °C
 // warmer or cooler, which an hour's run seldom meets and a marathon into
 // the afternoon often does; a wind 3 m/s (11 km/h) stronger or lighter;
 // and one that turned through 45°, two points of the compass either way.
@@ -441,14 +468,21 @@ type JSON struct {
 	// The weather at the start and the end, which over a long activity the
 	// averages above hide, and how steady the wind's direction was: 1 for
 	// one that never turned, near 0 for one that blew every way.
-	TemperatureStartC float64 `json:"temperature_start_c" yaml:"temperature_start_c"`
-	TemperatureEndC   float64 `json:"temperature_end_c" yaml:"temperature_end_c"`
-	WindSpeedStartMS  float64 `json:"wind_speed_start_ms" yaml:"wind_speed_start_ms"`
-	WindSpeedEndMS    float64 `json:"wind_speed_end_ms" yaml:"wind_speed_end_ms"`
-	WindFromStartDeg  float64 `json:"wind_from_start_deg" yaml:"wind_from_start_deg"`
-	WindFromEndDeg    float64 `json:"wind_from_end_deg" yaml:"wind_from_end_deg"`
-	WindSteadiness    float64 `json:"wind_steadiness" yaml:"wind_steadiness"`
-	Source            string  `json:"source" yaml:"source"`
+	// The most significant weather met, as a WMO code and in words, what
+	// fell, in mm, and the average cloud cover; left out where the
+	// weather came without them.
+	WeatherCode       *int     `json:"weather_code,omitempty" yaml:"weather_code,omitempty"`
+	Sky               string   `json:"sky,omitempty" yaml:"sky,omitempty"`
+	PrecipitationMM   *float64 `json:"precipitation_mm,omitempty" yaml:"precipitation_mm,omitempty"`
+	CloudCoverPct     *float64 `json:"cloud_cover_pct,omitempty" yaml:"cloud_cover_pct,omitempty"`
+	TemperatureStartC float64  `json:"temperature_start_c" yaml:"temperature_start_c"`
+	TemperatureEndC   float64  `json:"temperature_end_c" yaml:"temperature_end_c"`
+	WindSpeedStartMS  float64  `json:"wind_speed_start_ms" yaml:"wind_speed_start_ms"`
+	WindSpeedEndMS    float64  `json:"wind_speed_end_ms" yaml:"wind_speed_end_ms"`
+	WindFromStartDeg  float64  `json:"wind_from_start_deg" yaml:"wind_from_start_deg"`
+	WindFromEndDeg    float64  `json:"wind_from_end_deg" yaml:"wind_from_end_deg"`
+	WindSteadiness    float64  `json:"wind_steadiness" yaml:"wind_steadiness"`
+	Source            string   `json:"source" yaml:"source"`
 
 	WindCostS    *float64 `json:"wind_cost_s,omitempty" yaml:"wind_cost_s,omitempty"`
 	WindExposure string   `json:"wind_exposure,omitempty" yaml:"wind_exposure,omitempty"`
@@ -481,6 +515,10 @@ func JSONOf(p Plan, track *fitactivity.Track, c Costs, hasCosts bool) *JSON {
 		WindSpeedStartMS: s.Start.WindSpeed, WindSpeedEndMS: s.End.WindSpeed,
 		WindFromStartDeg: s.Start.WindFrom, WindFromEndDeg: s.End.WindFrom, WindSteadiness: s.WindSteadiness,
 		Source: fw.Credit + " (CC BY 4.0, " + fw.CreditURL + ")"}
+	if s.HasSky {
+		code, rain, cloud := s.WeatherCode, s.Precipitation, s.CloudCover
+		j.WeatherCode, j.Sky, j.PrecipitationMM, j.CloudCoverPct = &code, fw.Describe(code), &rain, &cloud
+	}
 	if !hasCosts {
 		return j
 	}
